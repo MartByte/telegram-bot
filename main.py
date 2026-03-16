@@ -22,7 +22,7 @@ from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filte
 
 # 1. Setup the 2026 Gemini Client
 # Replace with your actual API key from Google AI Studio
-client = genai.Client(api_key="AIzaSyCdvU3xDJFxIbpAG_fhilSaxl-hIsoyRxI")
+client = genai.Client(api_key="AIzaSyAQB5ZJmTn-xYVa-2ESgkreGk9V0K8Afxc")
 
 # 2. Setup Logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
@@ -34,7 +34,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         # Using the current 2026 stable free-tier model
         response = client.models.generate_content(
-            model="gemini-1.5-flash",  # 1.5-flash is currently the most reliable for Free Tier
+            model="gemini-2.5-flash",  # 1.5-flash is currently the most reliable for Free Tier
             contents=user_text
         )
         
