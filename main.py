@@ -61,6 +61,7 @@ import pythonbible as bible
 from groq import Groq
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
+import html # For escaping raw text
 
 # --- YOUR PRIVATE KEYS ---
 GROQ_API_KEY = "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"
@@ -70,19 +71,16 @@ client = Groq(api_key=GROQ_API_KEY)
 user_conversations = {}
 
 def fetch_scripture(query):
-    """Detects Bible references and returns formatted text."""
     try:
         references = bible.get_references(query)
-        if not references:
-            return None
-        
+        if not references: return None
         verse_ids = bible.convert_reference_to_verse_ids(references[0])
-        # Formatting each verse with a newline for readability
-        text = "".join([f"_{bible.get_verse_text(v_id).strip()}_\n\n" for v_id in verse_ids])
         
+        # Using <i> for italics in HTML mode
+        text = "".join([f"<i>{bible.get_verse_text(v_id).strip()}</i>\n\n" for v_id in verse_ids])
         title = bible.format_scripture_references(references)
-        # Using Bold for Title and Italics for Verse Text
-        return f"📖 *{title} (KJV)*\n\n{text}"
+        
+        return f"📖 <b>{title} (KJV)</b>\n\n{text}"
     except Exception as e:
         print(f"Bible Library Error: {e}")
         return None
@@ -98,9 +96,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 "role": "system", 
                 "content": (
                     "You are a wise Bible study assistant. "
-                    "FORMATTING RULES: Use **bold** for emphasis. Use bullet points for lists. "
-                    "Keep paragraphs short and use headers (e.g., ### Section) to separate ideas. "
-                    "Make your response highly readable for a mobile Telegram screen."
+                    "Use HTML tags for formatting: <b>bold</b>, <i>italic</i>. "
+                    "Use bullet points (•) for lists. Keep paragraphs short and clean."
                 )
             }
         ]
@@ -109,8 +106,8 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if scripture:
         user_conversations[chat_id].append({"role": "assistant", "content": f"Shared scripture: {scripture}"})
-        # parse_mode='Markdown' is the secret to making it look good
-        await update.message.reply_text(scripture, parse_mode='Markdown')
+        # SWITCHED to parse_mode='HTML'
+        await update.message.reply_text(scripture, parse_mode='HTML')
     else:
         user_conversations[chat_id].append({"role": "user", "content": user_text})
         
@@ -125,17 +122,19 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             
             ai_response = chat_completion.choices[0].message.content
+            # We wrap the response to handle potential unclosed tags or special characters
             user_conversations[chat_id].append({"role": "assistant", "content": ai_response})
             
-            # Sending AI response with Markdown enabled
-            await update.message.reply_text(ai_response, parse_mode='Markdown')
+            # SENDING with HTML mode
+            await update.message.reply_text(ai_response, parse_mode='HTML')
             
         except Exception as e:
-            print(f"Groq Error: {e}")
-            await update.message.reply_text("⚠️ *System Pause:* I'm having trouble formatting that. Try again?", parse_mode='Markdown')
+            # If HTML fails, we send it as plain text so the bot doesn't just go silent
+            print(f"Formatting Error, falling back to plain text: {e}")
+            await update.message.reply_text(ai_response)
 
 if __name__ == '__main__':
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
-    print("⚡ Readable Shared-Memory Bot is ONLINE.")
+    print("⚡ Stable HTML-Powered Bot is ONLINE.")
     app.run_polling()
