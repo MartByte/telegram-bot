@@ -66,66 +66,58 @@ from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filte
 GROQ_API_KEY = "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"
 TELEGRAM_TOKEN = "6102433125:AAGslqmuK7aaxbA7jfS6Vp1chKHdVkWRbR8"
 
-# Initialize Groq Client
 client = Groq(api_key=GROQ_API_KEY)
-
-# Memory dictionary keyed by chat_id (The 'Shared Brain' for your channel)
 user_conversations = {}
 
 def fetch_scripture(query):
-    """Detects Bible references and returns King James Version text."""
+    """Detects Bible references and returns formatted text."""
     try:
         references = bible.get_references(query)
         if not references:
             return None
         
-        # Convert first reference found to verse text
         verse_ids = bible.convert_reference_to_verse_ids(references[0])
-        text = "".join([f"{bible.get_verse_text(v_id)}\n" for v_id in verse_ids])
+        # Formatting each verse with a newline for readability
+        text = "".join([f"_{bible.get_verse_text(v_id).strip()}_\n\n" for v_id in verse_ids])
         
         title = bible.format_scripture_references(references)
-        return f"📖 **{title} (KJV)**\n\n{text}"
+        # Using Bold for Title and Italics for Verse Text
+        return f"📖 *{title} (KJV)*\n\n{text}"
     except Exception as e:
         print(f"Bible Library Error: {e}")
         return None
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    # Using chat_id ensures the bot shares memory with everyone in the same channel
     chat_id = update.effective_chat.id 
     user_text = update.message.text
-    if not user_text: 
-        return
+    if not user_text: return
 
-    # Initialize shared memory for this specific channel/chat if it doesn't exist
     if chat_id not in user_conversations:
         user_conversations[chat_id] = [
             {
                 "role": "system", 
                 "content": (
-                    "You are a wise and encouraging Bible study assistant helping a group of friends. "
-                    "Use the context of the entire conversation to provide helpful insights."
+                    "You are a wise Bible study assistant. "
+                    "FORMATTING RULES: Use **bold** for emphasis. Use bullet points for lists. "
+                    "Keep paragraphs short and use headers (e.g., ### Section) to separate ideas. "
+                    "Make your response highly readable for a mobile Telegram screen."
                 )
             }
         ]
 
-    # 1. Try to fetch literal Scripture first
     scripture = fetch_scripture(user_text)
     
     if scripture:
-        # We manually add the scripture to the history so the AI 'knows' what was just read
         user_conversations[chat_id].append({"role": "assistant", "content": f"Shared scripture: {scripture}"})
+        # parse_mode='Markdown' is the secret to making it look good
         await update.message.reply_text(scripture, parse_mode='Markdown')
     else:
-        # 2. Add the user's message to the SHARED history
         user_conversations[chat_id].append({"role": "user", "content": user_text})
         
-        # Keep only the last 12 messages for better context and token management
         if len(user_conversations[chat_id]) > 12:
-            # Keep the system instructions (index 0) and the last 11 messages
             user_conversations[chat_id] = [user_conversations[chat_id][0]] + user_conversations[chat_id][-11:]
 
         try:
-            # Send the entire shared history to Groq
             chat_completion = client.chat.completions.create(
                 messages=user_conversations[chat_id],
                 model="llama-3.3-70b-versatile",
@@ -133,22 +125,17 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
             )
             
             ai_response = chat_completion.choices[0].message.content
-            
-            # Save the AI response into the shared memory too
             user_conversations[chat_id].append({"role": "assistant", "content": ai_response})
             
-            await update.message.reply_text(ai_response)
+            # Sending AI response with Markdown enabled
+            await update.message.reply_text(ai_response, parse_mode='Markdown')
             
         except Exception as e:
-            print(f"Groq API Error: {e}")
-            await update.message.reply_text("I'm reflecting on that... (The connection is a bit slow).")
+            print(f"Groq Error: {e}")
+            await update.message.reply_text("⚠️ *System Pause:* I'm having trouble formatting that. Try again?", parse_mode='Markdown')
 
 if __name__ == '__main__':
-    # Initialize the Telegram Application
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
-    
-    # Catch all text messages in the channel/chat
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
-    
-    print("⚡ Shared-Memory Bible Bot is now ONLINE and running on Groq.")
+    print("⚡ Readable Shared-Memory Bot is ONLINE.")
     app.run_polling()
