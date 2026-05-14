@@ -2,6 +2,10 @@
 
 A robust, production-ready Telegram bot that leverages **Large Language Models (LLMs)** and specialized scripture libraries to provide a seamless Bible study experience.
 
+## 🚀 Try the Bot
+You can chat with the Bible Bot directly on Telegram:
+[Click here to start chatting!](https://t.me/martjesbot)
+
 ## 🔍 Overview
 This project integrates the **Llama-3.3-70b** model (via Groq) with the `pythonbible` library to create an intelligent assistant capable of providing context-aware biblical insights and instant KJV scripture retrieval.
 
