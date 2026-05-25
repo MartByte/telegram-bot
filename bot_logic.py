@@ -14,7 +14,7 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
 MODEL_NAME = "llama-3.3-70b-versatile"
 
-# Setup logging (Vital for remote jobs/internships)
+# Setup logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -57,34 +57,42 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     if scripture:
         user_conversations[chat_id].append({"role": "assistant", "content": f"Shared: {scripture}"})
-        await update.message.reply_text(scripture, parse_mode='HTML')
-    else:
-        # 2. Proceed to AI Chat if no scripture found
-        user_conversations[chat_id].append({"role": "user", "content": user_text})
-        
-        # Maintain sliding window context (memory management)
-        if len(user_conversations[chat_id]) > 12:
-            user_conversations[chat_id] = [user_conversations[chat_id][0]] + user_conversations[chat_id][-11:]
-
         try:
-            # Show "typing" to user
-            await context.bot.send_chat_action(chat_id=chat_id, action="typing")
-            
-            chat_completion = client.chat.completions.create(
-                messages=user_conversations[chat_id],
-                model=MODEL_NAME,
-                temperature=0.7,
-            )
-            
-            ai_response = chat_completion.choices[0].message.content
-            user_conversations[chat_id].append({"role": "assistant", "content": ai_response})
-            
-            await update.message.reply_text(ai_response, parse_mode='HTML')
-            
+            await update.message.reply_text(scripture, parse_mode='HTML')
         except Exception as e:
-            logger.error(f"Chat Completion/Formatting Error: {e}")
-            # Fallback to plain text if HTML tags are malformed
-            await update.message.reply_text(ai_response)
+            logger.error(f"Failed sending scripture with HTML parse mode: {e}")
+            await update.message.reply_text(scripture) # Fallback to plain text response
+        return
+
+    # 2. Proceed to AI Chat if no scripture found
+    user_conversations[chat_id].append({"role": "user", "content": user_text})
+    
+    # Maintain sliding window context (memory management)
+    if len(user_conversations[chat_id]) > 12:
+        user_conversations[chat_id] = [user_conversations[chat_id][0]] + user_conversations[chat_id][-11:]
+
+    # Define fallback response explicitly before the AI completion blocks
+    fallback_response = "Sorry, I am having trouble connecting to my brain right now. Please try again."
+
+    try:
+        # Show "typing" indicator to user
+        await context.bot.send_chat_action(chat_id=chat_id, action="typing")
+        
+        chat_completion = client.chat.completions.create(
+            messages=user_conversations[chat_id],
+            model=MODEL_NAME,
+            temperature=0.7,
+        )
+        
+        ai_response = chat_completion.choices[0].message.content
+        user_conversations[chat_id].append({"role": "assistant", "content": ai_response})
+        
+        await update.message.reply_text(ai_response, parse_mode='HTML')
+        
+    except Exception as e:
+        logger.error(f"Chat Completion/Formatting Error: {e}")
+        # Safely fallback to plain text using local scoped fallback string
+        await update.message.reply_text(fallback_response)
 
 if __name__ == '__main__':
     if not TELEGRAM_TOKEN:
